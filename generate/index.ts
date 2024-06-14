@@ -3,7 +3,7 @@ import path from 'path'
 import { getFolderData } from './get-folder-data'
 
 const _path = '@tw'
-const filename = `./public/${_path}.json`
+const filename = `./src/${_path}.json`
 
 console.log('Getting folder data...')
 const data = getFolderData(`./${_path}`).filter(v => !JSON.stringify(v).includes('DS_Store'))

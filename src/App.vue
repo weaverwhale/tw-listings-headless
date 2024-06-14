@@ -1,14 +1,14 @@
 <script lang="ts">
 import fuzzysort from 'fuzzysort'
 import { defineComponent } from 'vue'
+import data from './@tw.json'
 
 export default defineComponent({
   data() {
     return {
-      data: [],
+      data: data ?? [],
       search: '',
       loading: false,
-      fileName: '/@tw.json',
       folderFilter: '',
       typeFilter: '',
       sort: '',
@@ -98,21 +98,9 @@ export default defineComponent({
     },
   },
   mounted() {
-    this.getData()
     this.setModeOnHTML()
   },
   methods: {
-    getData() {
-      this.loading = true
-      fetch(this.fileName)
-        .then((res) => res.json())
-        .then((data) => {
-          this.data = data
-        })
-        .finally(() => {
-          this.loading = false
-        })
-    },
     reset() {
       this.search = ''
       this.folderFilter = ''
