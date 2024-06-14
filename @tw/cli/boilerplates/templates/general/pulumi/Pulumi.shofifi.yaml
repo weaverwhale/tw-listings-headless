@@ -1,0 +1,3 @@
+config:
+  gcp:project: shofifi
+  $SERVICE_ID:gcpLocation: us-central1

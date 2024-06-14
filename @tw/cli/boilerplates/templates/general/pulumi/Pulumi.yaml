@@ -1,0 +1,3 @@
+name: $SERVICE_ID
+runtime: nodejs
+description: $SERVICE_NAME Service

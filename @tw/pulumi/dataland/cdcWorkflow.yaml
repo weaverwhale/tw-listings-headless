@@ -1,0 +1,671 @@
+# Workflow for CDC (Change Data Capture) pipeline. This workflow is triggered by a Cloud Scheduler job. It runs a Dataform transformation and reports the results to the state service.
+# Syntax reference: https://cloud.google.com/workflows/docs/reference/syntax/syntax-cheat-sheet
+main:
+  params: [args]
+  steps:
+    - initArgs:
+        assign:
+          - stack: ${args.stack}
+          - pipeline: ${args.pipeline}
+          - isDerived: ${args.isDerived}
+          - dependencies: ${args.dependencies}
+          - workflowName: '${sys.get_env("GOOGLE_CLOUD_WORKFLOW_ID")}'
+          - labels: ${args.labels}
+          - subrun: ${map.get(args, "subrun")}
+          - explicitLabel: ${default(map.get(args, "explicitLabel"), false)}
+          - inputBQDataset: ${args.inputBQDataset}
+          - inputBQTable: ${args.inputBQTable}
+          - recentBQDataset: ${args.recentBQDataset}
+          - publicBQDataset: ${args.publicBQDataset}
+          - changesetDatasetId: ${args.changesetDatasetId}
+          - outputBQTable: ${args.outputBQTable}
+          - serviceUrl: ${args.serviceUrl}
+          - dataformBranch: ${args.dataformBranch}
+          - dataformRepository: ${args.dataformRepositoryId}
+          - forceStartDatetime: ${map.get(args, "forceStartDatetime")}
+          - forceEndDatetime: ${map.get(args, "forceEndDatetime")}
+          - startingTime: ${sys.now()}
+          - workflowError: null
+          - bqProjectResource: ${args.bqProjectResource}
+          # List of all BigQuery job statistics (including retries)
+          # Number of retries attempted, total bytes billed in GB and total slot minutes.
+          - allBigQueryJobStats: { retryCount: 0, billedInGB: 0.0, totalSlotMin: 0.0 }
+          # Global parameters
+          - MAX_JOB_RETRIES: 1 # How many timdes to retry the job if it fails
+          - executionId: '${sys.get_env("GOOGLE_CLOUD_WORKFLOW_EXECUTION_ID")}'
+          - workflowStartTime: ${time.format(sys.now())}
+          # maxJobDurationInSec param should be used only on staging, not on production
+          - MAX_JOB_DURATION_IN_SEC: ${int(default( map.get(args, "maxJobDurationInSec"), 10800))} # 3 hours. If the job takes longer than this, it will be marked as failed.
+          # This is an optional argument, used ONLY for the first run of the workflow, if a derived pipeline. If implemented in Dataform, this signals that the pipeline should be reading from latest and from changeset
+          - derivedPipelineFirstRun: ${map.get(args, "derivedPipelineFirstRun")}
+          - logsUrl: ${"https://console.cloud.google.com/logs/query;query=%22" + executionId + "%22%20timestamp%3E%3D%22" + workflowStartTime + "%22;duration=PT1H?project=" + sys.get_env("GOOGLE_CLOUD_PROJECT_ID")}
+          # Legacy params (remove after cleaning up dataform repo)
+          - rootBQDataset: ${map.get(args, "forceEndDatetime")}
+          - additionalValues: ${map.get(args, "additionalValues")}
+
+    - logs:
+        steps:
+          - logArgs:
+              call: sys.log
+              args:
+                severity: INFO
+                json:
+                  message: 'Starting workflow with args'
+                  args: ${args}
+
+          - logStarting:
+              call: sys.log
+              args:
+                text: ${"Logs - " + logsUrl}
+                severity: INFO
+
+    # Retrieve current batch properties from state service.
+    # If no other job is running, result includes new task properties and proceed=True.
+    # If another job is running, result includes currently running task properties and proceed=False.
+    - pullChunk:
+        steps:
+          - logPullChunkRequest:
+              call: sys.log
+              args:
+                severity: INFO
+                json:
+                  dataset: ${pipeline}
+                  labels: ${labels}
+                  startDatetime: ${forceStartDatetime}
+                  endDatetime: ${forceEndDatetime}
+                  maxJobDurationInSeconds: ${MAX_JOB_DURATION_IN_SEC}
+                  workflowName: ${workflowName}
+                  message: 'Pulling job definition from state service'
+
+          - callPullChunk:
+              try:
+                call: http.post
+                args:
+                  url: ${serviceUrl + "/job/setup/cdcv2"}
+                  auth:
+                    type: OIDC
+                  body:
+                    dataset: ${pipeline}
+                    labels: ${labels}
+                    startDatetime: ${forceStartDatetime}
+                    endDatetime: ${forceEndDatetime}
+                    maxJobDurationInSeconds: ${MAX_JOB_DURATION_IN_SEC}
+                    workflowName: ${workflowName}
+                    isDerived: ${isDerived}
+                    dependencies: ${dependencies}
+                  headers:
+                    execution_id: '${executionId}'
+                result: setupResult
+              retry:
+                predicate: ${retry_predicate}
+                max_retries: 5
+                backoff:
+                  initial_delay: 1
+                  max_delay: 60
+                  multiplier: 2
+
+          - logPullChunkResponse:
+              call: sys.log
+              args:
+                severity: INFO
+                json:
+                  message: 'State service returned'
+                  result: ${setupResult.body}
+                  code: ${setupResult.code}
+
+    - CheckIfPreviousJobRunning:
+        switch:
+          - condition: ${setupResult.body.stillInProgress}
+            steps:
+              - logNoProceedAndNotTimeout:
+                  call: sys.log
+                  args:
+                    text: ${"Wait for the previous job(jobId-" + setupResult.body.jobId + ") to end. jobDurationInSec < " + MAX_JOB_DURATION_IN_SEC + ". Skipping"}
+                    severity: WARNING
+              - returnNoProceedNoRaise:
+                  return: ${setupResult.body}
+          - condition: ${map.get(setupResult.body, "noWork") == true}
+            steps:
+              - logNoProceedNoWork:
+                  call: sys.log
+                  args:
+                    text: ${"No work to do! no any update on changeset deps"}
+                    severity: WARNING
+              - returnProceedNoWork:
+                  return: ${setupResult.body}
+
+    - dataForm:
+        steps:
+          - prepareDataFormArgs:
+              assign:
+                - workflowSuccess: false
+                - jobId: ${setupResult.body.jobId}
+                - compilationConfig:
+                    defaultDatabase: '${sys.get_env("GOOGLE_CLOUD_PROJECT_ID")}'
+                    defaultSchema: '${publicBQDataset}'
+                    vars:
+                      stack: '${stack}'
+                      database: '${sys.get_env("GOOGLE_CLOUD_PROJECT_ID")}'
+                      derivedPipelineFirstRun: '${derivedPipelineFirstRun}'
+                      pipelineName: '${pipeline}'
+                      labels: '${labels}'
+                      subrun: '${subrun}'
+                      inputDatasetName: '${inputBQDataset}'
+                      inputTableName: '${inputBQTable}'
+                      recentDatasetName: '${recentBQDataset}'
+                      publicDatasetName: '${publicBQDataset}'
+                      changesetDatasetName: '${changesetDatasetId}'
+                      outputTableName: '${outputBQTable}'
+                      ingestTimeStart: ${map.get(setupResult.body, "fromTimestamp")}
+                      ingestTimeEnd: ${map.get(setupResult.body, "toTimestamp")}
+                      latestFrom: ${if(isDerived, map.get(setupResult.body, "fromTimestamp"), null)}
+                      latestTo: ${if(isDerived, map.get(setupResult.body, "toTimestamp"), null)}
+                      jobDetails: ${setupResult.body.jobDetails}
+                      procId: ${setupResult.body.procId}
+                      workflowId: '${executionId}'
+                      additionalValues: '${json.encode_to_string(additionalValues)}'
+          - callDataForm:
+              try:
+                call: invokeDataForm
+                args:
+                  serviceUrl: ${serviceUrl}
+                  compilationConfig: ${compilationConfig}
+                  dataformRepository: ${dataformRepository} # project is came from the step next
+                  gitCommitish: ${dataformBranch}
+                  executionId: ${executionId}
+                  maxJobDurationInSeconds: ${MAX_JOB_DURATION_IN_SEC}
+                  startingTime: ${startingTime}
+                  bqProjectResource: ${bqProjectResource}
+                result: dataformResult
+              except:
+                as: e
+                steps:
+                  - logError:
+                      call: sys.log
+                      args:
+                        severity: 'ERROR'
+                        json:
+                          message: 'Workflow failed with error:'
+                          error: ${e}
+                  - assignError:
+                      assign:
+                        - workflowSuccess: false
+                        - workflowError: ${e}
+                        - dataformResult:
+                            workflowSuccess: false
+                            bqParentJobId: null
+                            bqExecutionUrl: null
+                            dataformExecutionUrl: null
+                      next: reportCompletedJob
+          - assignDataformResult:
+              assign:
+                - workflowSuccess: ${dataformResult.workflowSuccess}
+
+    # Mark job status as finished or failed in state service.
+    - reportCompletedJob:
+        try:
+          call: completeJob
+          args:
+            projectId: ${bqProjectResource}
+            serviceUrl: ${args.serviceUrl}
+            pipeline: ${pipeline}
+            labels: ${labels}
+            jobId: ${jobId}
+            workflowSuccess: ${workflowSuccess}
+            executionId: ${executionId}
+            workflowName: ${workflowName}
+          result: completeJobResult
+        retry:
+          predicate: ${retry_predicate}
+          max_retries: 5
+          backoff:
+            initial_delay: 1
+            max_delay: 60
+            multiplier: 2
+
+    - bigQueryStats:
+        steps:
+          - fetchBigQueryStats:
+              try:
+                call: getBigQueryStats
+                args:
+                  serviceUrl: ${serviceUrl}
+                  projectId: ${bqProjectResource}
+                  bqParentJobId: ${dataformResult.bqParentJobId}
+                  executionId: ${executionId}
+                  labels: ${labels}
+                  workflowSuccess: ${workflowSuccess}
+                  publicBQDataset: ${publicBQDataset}
+                  changesetDatasetId: ${changesetDatasetId}
+                  rootBQDataset: ${rootBQDataset}
+                  workflowName: ${workflowName}
+                  pipeline: ${pipeline}
+                result: bigQueryStats
+              retry:
+                predicate: ${retry_predicate}
+                max_retries: 5
+                backoff:
+                  initial_delay: 1
+                  max_delay: 60
+                  multiplier: 2
+
+          - parseBigQueryTasksStats:
+              assign:
+                - allBigQueryJobStats.billedInGB: ${allBigQueryJobStats.billedInGB + double(bigQueryStats.billed_in_gb)}
+                - allBigQueryJobStats.totalSlotMin: ${allBigQueryJobStats.totalSlotMin + double(bigQueryStats.total_slot_min)}
+
+    - finish:
+        switch:
+          # On workflow success, collect data from labelled subtasks
+          - condition: ${workflowSuccess}
+            steps:
+              - logSuccess:
+                  call: sys.log
+                  args:
+                    severity: 'INFO'
+                    json:
+                      message: 'Workflow completed successfully'
+                      success: ${workflowSuccess}
+                      input: dataformCompilationConfig
+                      bigQueryProjectRunner: ${bqProjectResource}
+                      dataQualityStats: ${completeJobResult.dataQualityStats}
+                      bigQueryStats: ${bigQueryStats}
+
+              - finishSuccess:
+                  switch:
+                    - condition: ${workflowSuccess}
+                      return:
+                        logs: ${logsUrl}
+                        dataformExecutionUrl: ${dataformResult.dataformExecutionUrl}
+                        bqParentJobId: ${dataformResult.bqParentJobId}
+                        bqExecutionUrl: ${dataformResult.bqExecutionUrl}
+                        allBigQueryJobStats: ${allBigQueryJobStats}
+                        pullChunkResult: ${setupResult.body}
+                        dataQuality: ${completeJobResult.dataQualityStats}
+                        lastBigQueryStats: ${bigQueryStats}
+
+          - condition: ${not(workflowSuccess)}
+            steps:
+              - logFailure:
+                  call: sys.log
+                  args:
+                    severity: 'ALERT'
+                    json:
+                      message: 'Workflow completed with failure'
+                      success: ${workflowSuccess}
+                      input: ${workflowError}
+                      bigQueryStats: ${bigQueryStats}
+
+              - increaseRetryCount:
+                  assign:
+                    - allBigQueryJobStats.retryCount: ${allBigQueryJobStats.retryCount + 1}
+
+              - retryIfNotExceeded:
+                  switch:
+                    # If retry count was not exceeded, mark the job as failed in the state service, and request new job ID
+                    - condition: ${allBigQueryJobStats.retryCount < MAX_JOB_RETRIES}
+                      steps:
+                        - logRetry:
+                            call: sys.log
+                            args:
+                              severity: 'WARNING'
+                              text: ${"Retrying job (Retry No." + allBigQueryJobStats.retryCount + "; " + (MAX_JOB_RETRIES - allBigQueryJobStats.retryCount) + " retries left)"}
+                            # ...and retry!
+                            next: pullChunk # find better way
+                    # Otherwise, exit with error
+                    - condition: true
+                      steps:
+                        - failAfterReries:
+                            raise:
+                              message: 'Job failed'
+                              success: ${workflowSuccess}
+                              error: ${workflowError}
+                              lastBigQueryStats: ${bigQueryStats}
+                              allBigQueryJobStats: ${allBigQueryJobStats}
+                              bqParentJobId: ${dataformResult.bqParentJobId}
+                              bqExecutionUrl: ${dataformResult.bqExecutionUrl}
+                              dataformExecutionUrl: ${dataformResult.dataformExecutionUrl}
+                              logs: ${logsUrl}
+                              pullChunkResult: ${setupResult.body}
+
+# Sub workflows - a.k.a functions
+
+invokeDataForm:
+  params:
+    [
+      executionId,
+      serviceUrl,
+      dataformRepository,
+      compilationConfig,
+      gitCommitish,
+      startingTime,
+      maxJobDurationInSeconds,
+      bqProjectResource,
+    ]
+  steps:
+    - logCallDataForm:
+        call: sys.log
+        args:
+          severity: 'INFO'
+          json:
+            message: 'Calling dataform job...'
+            serviceUrl: ${serviceUrl}
+            compilationConfig: ${compilationConfig}
+            dataformRepository: ${dataformRepository}
+            gitCommitish: ${gitCommitish}
+            executionId: ${executionId}
+
+    - callDataForm:
+        # try:
+        call: http.post
+        args:
+          url: ${serviceUrl + "/job/dataform"}
+          auth:
+            type: OIDC
+          body:
+            compilationConfig: '${compilationConfig}'
+            dataformRepositoryId: '${dataformRepository}'
+            serviceAccount: '${sys.get_env("GOOGLE_CLOUD_SERVICE_ACCOUNT_NAME")}'
+            gitCommitish: '${gitCommitish}'
+          headers:
+            execution_id: '${executionId}'
+        result: workflowInvocation
+        # retry:
+        #   predicate: ${retry_predicate}
+        #   max_retries: 4
+        #   backoff:
+        #     initial_delay: 3
+        #     max_delay: 60
+        #     multiplier: 2
+
+    # Add link to the workflow execution
+    - assignDataformExecutionUrl:
+        assign:
+          - dataformExecutionUrl: ${"https://console.cloud.google.com/bigquery/dataform/locations/" + sys.get_env("GOOGLE_CLOUD_LOCATION") + text.find_all_regex(workflowInvocation.body.name, "/repositories/[^/]+/")[0].match + "workflows" + text.find_all_regex(workflowInvocation.body.name, "/[^/]+$")[0].match + "?project=" + bqProjectResource}
+          - queryBqParentJob: ${"SELECT DISTINCT parent_job_id FROM `.region-us`.INFORMATION_SCHEMA.JOBS WHERE creation_time >= TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL 2 HOUR) AND(SELECT ANY_VALUE(label.value) FROM UNNEST(labels) AS label WHERE label.key = 'workflow-id') = '" + executionId + "'"}
+
+    - logDataformExecutionUrl:
+        call: sys.log
+        args:
+          severity: 'INFO'
+          json:
+            message: ${"DataForm response, execution url- " + dataformExecutionUrl}
+            dataformExecutionUrl: ${dataformExecutionUrl}
+            workflowInvocation: ${workflowInvocation.body}
+            queryBqParentJob: ${queryBqParentJob}
+
+    - findBqJobUrl:
+        call: getBqJobUrl
+        args:
+          bqProjectResource: ${bqProjectResource}
+          queryBqParentJob: ${queryBqParentJob}
+        result: bqParentJobId
+
+    - awaitDataformCompletion:
+        steps:
+          - dataformCompletionSleep:
+              call: sys.sleep
+              args:
+                seconds: 10
+          - getDataformCompletion:
+              try:
+                call: http.get
+                args:
+                  url: ${"https://dataform.googleapis.com/v1beta1/" + workflowInvocation.body.name}
+                  auth:
+                    type: OAuth2
+                result: workflowInvocation
+              retry:
+                predicate: ${retry_predicate}
+                max_retries: 8
+                backoff:
+                  initial_delay: 1
+                  max_delay: 60
+                  multiplier: 2
+          - logDataformCompletion:
+              switch:
+                - condition: ${workflowInvocation.body.state != "RUNNING"}
+                  call: sys.log
+                  args:
+                    text: ${"Got workflow state:" + workflowInvocation.body.state}
+
+          # If the workflow is still running, check if it has exceeded the max runtime (3 hours). If so, mark it as having timed out.
+          # If workflow is still running and has not exceeded the max runtime, continue waiting, logging state changes as they occur.
+          - checkDataformCompletion:
+              switch:
+                - condition: ${sys.now() - startingTime > maxJobDurationInSeconds }
+                  raise:
+                    message: 'Job timeout'
+                    invocation: ${workflowInvocation.body}
+                    start_time: ${startingTime}
+                - condition: ${workflowInvocation.body.state == "CANCELING"}
+                  steps:
+                    - logCanceling:
+                        call: sys.log
+                        args:
+                          json:
+                            message: 'Dataform is in canceling state. Waiting for completion ...'
+                            invocation: ${workflowInvocation.body}
+                          severity: INFO
+                  next: awaitDataformCompletion
+                - condition: ${workflowInvocation.body.state in ["STATE_UNSPECIFIED", "RUNNING"]}
+                  next: awaitDataformCompletion
+                - condition: ${workflowInvocation.body.state == "FAILED"}
+                  return:
+                    workflowSuccess: false
+                    bqParentJobId: ${bqParentJobId}
+                    bqExecutionUrl: ${"https://console.cloud.google.com/bigquery?project=" + bqProjectResource + "&j=bq:US:" + bqParentJobId + "&page=queryresults"}
+                    dataformExecutionUrl: ${dataformExecutionUrl}
+                - condition: ${workflowInvocation.body.state == "SUCCEEDED"}
+                  return:
+                    workflowSuccess: true
+                    bqParentJobId: ${bqParentJobId}
+                    bqExecutionUrl: ${"https://console.cloud.google.com/bigquery?project=" + bqProjectResource + "&j=bq:US:" + bqParentJobId + "&page=queryresults"}
+                    dataformExecutionUrl: ${dataformExecutionUrl}
+
+getBigQueryStats:
+  params:
+    [
+      executionId,
+      serviceUrl,
+      projectId,
+      bqParentJobId,
+      labels,
+      rootBQDataset,
+      publicBQDataset,
+      changesetDatasetId,
+      workflowSuccess,
+      workflowName,
+      pipeline,
+    ]
+  steps:
+    - logBigQueryStatsRequest:
+        call: sys.log
+        args:
+          severity: 'INFO'
+          json:
+            message: 'Calling getBigQueryStats...'
+            projectId: ${projectId}
+            workflowId: ${executionId}
+            bqParentJobId: ${bqParentJobId}
+            labels: ${labels}
+            rootBQDataset: ${rootBQDataset}
+            publicBQDataset: ${publicBQDataset}
+            changesetBQDataset: ${changesetDatasetId}
+            workflowSuccess: ${workflowSuccess}
+            workflowName: ${workflowName}
+            pipeline: ${pipeline}
+    - call_get_big_query_stats:
+        try:
+          call: http.post
+          args:
+            url: ${serviceUrl + "/job/big-query-stats"}
+            auth:
+              type: OIDC
+            body:
+              projectId: ${projectId}
+              workflowId: ${executionId}
+              bqParentJobId: ${bqParentJobId}
+              labels: ${labels}
+              rootBQDataset: ${rootBQDataset}
+              publicBQDataset: ${publicBQDataset}
+              changesetBQDataset: ${changesetDatasetId}
+              workflowSuccess: ${workflowSuccess}
+              workflowName: ${workflowName}
+              pipeline: ${pipeline}
+            headers:
+              execution_id: '${executionId}'
+          result: big_query_stats
+        retry:
+          predicate: ${retry_predicate}
+          max_retries: 5
+          backoff:
+            initial_delay: 1
+            max_delay: 60
+            multiplier: 2
+
+    - logBigQueryStats:
+        call: sys.log
+        args:
+          severity: 'INFO'
+          json:
+            message: 'getBigQueryStats completed'
+            result: ${big_query_stats.body}
+
+    - return_res:
+        return: ${big_query_stats.body}
+
+completeJob:
+  params:
+    [projectId, executionId, serviceUrl, pipeline, labels, jobId, workflowSuccess, workflowName]
+  steps:
+    - logCompletingJobRequest:
+        call: sys.log
+        args:
+          severity: 'INFO'
+          json:
+            message: 'Completing job request...'
+            projectId: ${projectId}
+            serviceUrl: ${serviceUrl}
+            pipeline: ${pipeline}
+            labels: ${labels}
+            jobId: ${jobId}
+            workflowSuccess: ${workflowSuccess}
+            executionId: ${executionId}
+            workflowName: ${workflowName}
+
+    - call_complete_chunk:
+        try:
+          call: http.post
+          args:
+            url: ${serviceUrl + "/job/cleanupv2"}
+            auth:
+              type: OIDC
+            body:
+              projectId: ${projectId}
+              dataset: ${pipeline}
+              jobId: ${jobId}
+              labels: ${labels}
+              success: ${workflowSuccess}
+              pipeline: ${pipeline}
+              workflowName: ${workflowName}
+            headers:
+              execution_id: '${executionId}'
+
+          result: completeJobResult
+
+        except:
+          as: e
+          steps:
+            - log_errors:
+                call: sys.log
+                args:
+                  severity: 'ERROR'
+                  json:
+                    message: 'Completing job request failed with error'
+                    error: ${e}
+            - unhandled_exception:
+                raise: ${e}
+
+        retry:
+          predicate: ${retry_predicate}
+          max_retries: 5
+          backoff:
+            initial_delay: 1
+            max_delay: 60
+            multiplier: 2
+
+    - logCompletingJobResponse:
+        call: sys.log
+        args:
+          severity: 'INFO'
+          json:
+            message: 'Completing job request completed'
+            result: ${completeJobResult}
+            executionId: ${executionId}
+
+    - return_res:
+        return: ${completeJobResult.body}
+
+getBqJobUrl:
+  params: [bqProjectResource, queryBqParentJob]
+  steps:
+    - getBqJobId:
+        try:
+          steps:
+            - getBqJobIdSleep:
+                call: sys.sleep
+                args:
+                  seconds: 20
+            - getBqJobIdQuery:
+                call: googleapis.bigquery.v2.jobs.query
+                args:
+                  projectId: ${bqProjectResource}
+                  body:
+                    query: ${queryBqParentJob}
+                    useLegacySql: false
+                result: bqParentJobResult
+        except:
+          as: e
+          steps:
+            - logErrorGetBqJobId:
+                call: sys.log
+                args:
+                  severity: 'INFO'
+                  json:
+                    message: ${"Error getting BQ job link "}
+                    err: ${e}
+            - failedGetBqJobId:
+                return: 'not succeeded'
+    - logBqExecutionUrl:
+        try:
+          call: sys.log
+          args:
+            severity: 'INFO'
+            json:
+              bqExecutionUrl: ${"https://console.cloud.google.com/bigquery?project=" + bqProjectResource + "&j=bq:US:" + bqParentJobResult["rows"][0]["f"][0]["v"] + "&page=queryresults"}
+              bqParentJobId: ${bqParentJobResult["rows"][0]["f"][0]["v"]}
+        except:
+          as: e
+          steps:
+            - logErrorBqExecutionUrl:
+                call: sys.log
+                args:
+                  severity: 'INFO'
+                  json:
+                    message: ${"Error getting BQ job link "}
+                    err: ${e}
+            - failedLogBqExecutionUrl:
+                return: 'not succeeded. no any rows found'
+    - return_res:
+        return: ${bqParentJobResult["rows"][0]["f"][0]["v"]}
+
+retry_predicate:
+  params: [e]
+  steps:
+    - check_status_code:
+        switch:
+          - condition: ${not("code" in e) or (e.code in [429, 422, 502, 503, 504, 400, 408, 500]) or ("ConnectionError" in e.tags) or ("ConnectionFailedError" in e.tags) or ("TimeoutError" in e.tags)}
+            return: true
+    - otherwise:
+        return: false

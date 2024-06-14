@@ -1,0 +1,909 @@
+additionalInstanceConfig: {}
+busybox:
+  image:
+    pullPolicy: IfNotPresent
+    repository: docker.io/busybox
+    tag: '1.28'
+computeLogManager:
+  config: {}
+  type: NoOpComputeLogManager
+# dagster-user-deployments:
+#   celeryConfigSecretName: dagster-celery-config-secret
+#   dagsterHome: /opt/dagster/dagster_home
+#   enableSubchart: true
+#   enabled: true
+#   extraManifests: []
+# deployments:
+#   - affinity: {}
+#     annotations: {}
+#     dagsterApiGrpcArgs:
+#       - --python-file
+#       - /example_project/example_repo/repo.py
+#     env: []
+#     envConfigMaps: []
+#     envSecrets: []
+#     image:
+#       pullPolicy: Always
+#       repository: docker.io/dagster/user-code-example
+#       tag: null
+#     includeConfigInLaunchedRuns:
+#       enabled: true
+#     labels: {}
+#     livenessProbe: {}
+#     name: k8s-example-user-code-1
+#     nodeSelector: {}
+#     podSecurityContext: {}
+#     port: 3030
+#     readinessProbe:
+#       enabled: true
+#       failureThreshold: 1
+#       periodSeconds: 20
+#       successThreshold: 1
+#       timeoutSeconds: 10
+#     resources: {}
+#     securityContext: {}
+#     service:
+#       annotations: {}
+#     startupProbe:
+#       enabled: false
+#     tolerations: []
+#     volumeMounts: []
+#     volumes: []
+#   global:
+#     celeryConfigSecretName: dagster-celery-config-secret
+#     dagsterHome: /opt/dagster/dagster_home
+#     postgresqlSecretName: dagster-postgresql-secret
+#     serviceAccountName: ''
+#   imagePullSecrets: []
+#   postgresqlSecretName: dagster-postgresql-secret
+#   rbacEnabled: true
+#   serviceAccount:
+#     annotations: {}
+#     create: true
+#     name: ''
+dagsterDaemon:
+  affinity: {}
+  annotations: {}
+  deploymentLabels: {}
+  enabled: true
+  env: []
+  envConfigMaps: []
+  envSecrets: []
+  heartbeatTolerance: 1800
+  image:
+    pullPolicy: Always
+    repository: docker.io/dagster/dagster-celery-k8s
+    tag: null
+  labels: {}
+  livenessProbe: {}
+  nodeSelector: {}
+  podSecurityContext: {}
+  readinessProbe: {}
+  resources: {}
+  runCoordinator:
+    config:
+      queuedRunCoordinator:
+        dequeueIntervalSeconds: null
+        dequeueNumWorkers: 4
+        dequeueUseThreads: true
+        maxConcurrentRuns: null
+        tagConcurrencyLimits: []
+    enabled: true
+    type: QueuedRunCoordinator
+  runMonitoring:
+    enabled: true
+    freeSlotsAfterRunEndSeconds: 0
+    maxResumeRunAttempts: 0
+    pollIntervalSeconds: 120
+    startTimeoutSeconds: 300
+  runRetries:
+    enabled: true
+    maxRetries: 0
+  schedules:
+    numWorkers: 4
+    useThreads: true
+  securityContext: {}
+  sensors:
+    numWorkers: 4
+    useThreads: true
+  startupProbe: {}
+  tolerations: []
+  volumeMounts: []
+  volumes: []
+dagsterWebserver:
+  affinity: {}
+  annotations: {}
+  dbPoolRecycle: null
+  dbStatementTimeout: null
+  deploymentLabels: {}
+  enableReadOnly: false
+  env: []
+  envConfigMaps: []
+  envSecrets: []
+  image:
+    pullPolicy: Always
+    repository: docker.io/dagster/dagster-celery-k8s
+    tag: null
+  labels: {}
+  livenessProbe: {}
+  logLevel: null
+  nameOverride: dagster-webserver
+  nodeSelector: {}
+  pathPrefix: null
+  podSecurityContext: {}
+  readinessProbe:
+    failureThreshold: 3
+    httpGet:
+      path: /server_info
+      port: 80
+    periodSeconds: 20
+    successThreshold: 1
+    timeoutSeconds: 10
+  replicaCount: 1
+  resources: {}
+  securityContext: {}
+  service:
+    annotations: {}
+    port: 80
+    type: ClusterIP
+  startupProbe:
+    enabled: false
+  tolerations: []
+  volumeMounts: []
+  volumes: []
+  # workspace:
+  #   enabled: false
+  #   externalConfigmap: null
+  #   servers:
+  #     - host: k8s-example-user-code-1
+  #       name: user-code-example
+  #       port: 3030
+extraManifests: null
+flower:
+  affinity: {}
+  annotations: {}
+  enabled: false
+  image:
+    pullPolicy: Always
+    repository: docker.io/mher/flower
+    tag: 0.9.5
+  livenessProbe:
+    failureThreshold: 3
+    periodSeconds: 20
+    tcpSocket:
+      port: flower
+  nodeSelector: {}
+  podSecurityContext: {}
+  resources: {}
+  securityContext: {}
+  service:
+    annotations: {}
+    port: 5555
+    type: ClusterIP
+  startupProbe:
+    failureThreshold: 6
+    periodSeconds: 10
+    tcpSocket:
+      port: flower
+  tolerations: []
+fullnameOverride: ''
+generateCeleryConfigSecret: true
+generatePostgresqlPasswordSecret: true
+global:
+  celeryConfigSecretName: dagster-celery-config-secret
+  dagsterHome: /opt/dagster/dagster_home
+  postgresqlSecretName: dagster-postgresql-secret
+  serviceAccountName: ''
+imagePullSecrets: []
+ingress:
+  annotations: {}
+  dagsterWebserver:
+    host: ''
+    path: /*
+    pathType: ImplementationSpecific
+    precedingPaths: []
+    succeedingPaths: []
+    tls:
+      enabled: false
+      secretName: ''
+  enabled: false
+  flower:
+    host: ''
+    path: ''
+    pathType: ImplementationSpecific
+    precedingPaths: []
+    succeedingPaths: []
+    tls:
+      enabled: false
+      secretName: ''
+  ingressClassName: null
+  labels: {}
+  readOnlyDagsterWebserver:
+    host: ''
+    path: /*
+    pathType: ImplementationSpecific
+    precedingPaths: []
+    succeedingPaths: []
+    tls:
+      enabled: false
+      secretName: ''
+migrate:
+  enabled: false
+nameOverride: ''
+pipelineRun:
+  env: {}
+  image:
+    pullPolicy: Always
+    repository: docker.io/dagster/user-code-example
+    tag: null
+postgresql:
+  enabled: true
+  extraEnv: []
+  global:
+    celeryConfigSecretName: dagster-celery-config-secret
+    dagsterHome: /opt/dagster/dagster_home
+    postgresql: {}
+    postgresqlSecretName: dagster-postgresql-secret
+    serviceAccountName: ''
+  image:
+    debug: false
+    pullPolicy: IfNotPresent
+    registry: docker.io
+    repository: library/postgres
+    tag: '14.6'
+  ldap:
+    baseDN: ''
+    bindDN: ''
+    enabled: false
+    port: ''
+    prefix: ''
+    scheme: ''
+    search_attr: ''
+    search_filter: ''
+    server: ''
+    suffix: ''
+    tls: false
+    url: ''
+  livenessProbe:
+    enabled: true
+    failureThreshold: 6
+    initialDelaySeconds: 30
+    periodSeconds: 10
+    successThreshold: 1
+    timeoutSeconds: 5
+  master:
+    affinity: {}
+    annotations: {}
+    extraInitContainers: ''
+    extraVolumeMounts: []
+    extraVolumes: []
+    labels: {}
+    nodeSelector: {}
+    podAnnotations: {}
+    podLabels: {}
+    priorityClassName: ''
+    tolerations: []
+  metrics:
+    enabled: false
+    image:
+      pullPolicy: IfNotPresent
+      registry: docker.io
+      repository: bitnami/postgres-exporter
+      tag: 0.7.0-debian-9-r12
+    livenessProbe:
+      enabled: true
+      failureThreshold: 6
+      initialDelaySeconds: 5
+      periodSeconds: 10
+      successThreshold: 1
+      timeoutSeconds: 5
+    prometheusRule:
+      additionalLabels: {}
+      enabled: false
+      namespace: ''
+      rules: []
+    readinessProbe:
+      enabled: true
+      failureThreshold: 6
+      initialDelaySeconds: 5
+      periodSeconds: 10
+      successThreshold: 1
+      timeoutSeconds: 5
+    securityContext:
+      enabled: false
+      runAsUser: 1001
+    service:
+      annotations:
+        prometheus.io/port: '9187'
+        prometheus.io/scrape: 'true'
+      type: ClusterIP
+    serviceMonitor:
+      additionalLabels: {}
+      enabled: false
+  networkPolicy:
+    allowExternal: true
+    enabled: false
+  persistence:
+    accessModes:
+      - ReadWriteOnce
+    annotations: {}
+    enabled: true
+    mountPath: /bitnami/postgresql
+    size: 8Gi
+    subPath: ''
+  postgresqlDataDir: /bitnami/postgresql/data
+  postgresqlDatabase: test
+  postgresqlHost: ''
+  postgresqlParams: {}
+  postgresqlPassword: test
+  postgresqlScheme: ''
+  postgresqlUsername: test
+  readinessProbe:
+    enabled: true
+    failureThreshold: 6
+    initialDelaySeconds: 5
+    periodSeconds: 10
+    successThreshold: 1
+    timeoutSeconds: 5
+  replication:
+    applicationName: my_application
+    enabled: false
+    numSynchronousReplicas: 0
+    password: repl_password
+    slaveReplicas: 1
+    synchronousCommit: 'off'
+    user: repl_user
+  resources:
+    requests:
+      cpu: 250m
+      memory: 256Mi
+  securityContext:
+    enabled: true
+    fsGroup: 1001
+    runAsUser: 1001
+  service:
+    annotations: {}
+    port: 5432
+    type: ClusterIP
+  serviceAccount:
+    enabled: false
+  shmVolume:
+    enabled: true
+  slave:
+    affinity: {}
+    annotations: {}
+    extraInitContainers: ''
+    extraVolumeMounts: []
+    extraVolumes: []
+    labels: {}
+    nodeSelector: {}
+    podAnnotations: {}
+    podLabels: {}
+    priorityClassName: ''
+    tolerations: []
+  updateStrategy:
+    type: RollingUpdate
+  volumePermissions:
+    enabled: true
+    image:
+      pullPolicy: Always
+      registry: docker.io
+      repository: bitnami/minideb
+      tag: stretch
+    securityContext:
+      runAsUser: 0
+pythonLogs: {}
+rabbitmq:
+  affinity: {}
+  enabled: false
+  extraSecrets: {}
+  forceBoot:
+    enabled: false
+  global:
+    celeryConfigSecretName: dagster-celery-config-secret
+    dagsterHome: /opt/dagster/dagster_home
+    postgresqlSecretName: dagster-postgresql-secret
+    serviceAccountName: ''
+  image:
+    debug: false
+    pullPolicy: IfNotPresent
+    registry: docker.io
+    repository: bitnami/rabbitmq
+    tag: 3.8.12
+  ingress:
+    annotations: {}
+    enabled: false
+    path: /
+    tls: false
+    tlsSecret: myTlsSecret
+  ldap:
+    enabled: false
+    port: '389'
+    server: ''
+    tls:
+      enabled: false
+    user_dn_pattern: cn=${username},dc=example,dc=org
+  livenessProbe:
+    enabled: true
+    failureThreshold: 6
+    initialDelaySeconds: 120
+    periodSeconds: 30
+    successThreshold: 1
+    timeoutSeconds: 20
+  metrics:
+    annotations:
+      prometheus.io/port: '9419'
+      prometheus.io/scrape: 'true'
+    capabilities: bert,no_sort
+    enabled: false
+    env: {}
+    image:
+      pullPolicy: IfNotPresent
+      registry: docker.io
+      repository: bitnami/rabbitmq-exporter
+      tag: 0.29.0-debian-9-r139
+    livenessProbe:
+      enabled: true
+      failureThreshold: 6
+      initialDelaySeconds: 15
+      periodSeconds: 30
+      successThreshold: 1
+      timeoutSeconds: 5
+    port: 9419
+    rabbitmqAddress: localhost
+    readinessProbe:
+      enabled: true
+      failureThreshold: 3
+      initialDelaySeconds: 5
+      periodSeconds: 30
+      successThreshold: 1
+      timeoutSeconds: 5
+    resources: {}
+    serviceMonitor:
+      additionalLabels: {}
+      enabled: false
+      honorLabels: false
+      interval: 30s
+  networkPolicy:
+    allowExternal: true
+    enabled: false
+  nodeSelector: {}
+  persistence:
+    accessMode: ReadWriteOnce
+    enabled: true
+    path: /opt/bitnami/rabbitmq/var/lib/rabbitmq
+    size: 8Gi
+  podAnnotations: {}
+  podDisruptionBudget: {}
+  podLabels: {}
+  podManagementPolicy: OrderedReady
+  rabbitmq:
+    advancedConfiguration: ''
+    clustering:
+      address_type: hostname
+      k8s_domain: cluster.local
+    configuration: |-
+      ## Clustering
+      cluster_formation.peer_discovery_backend  = rabbit_peer_discovery_k8s
+      cluster_formation.k8s.host = kubernetes.default.svc.cluster.local
+      cluster_formation.node_cleanup.interval = 10
+      cluster_formation.node_cleanup.only_log_warning = true
+      cluster_partition_handling = autoheal
+      # queue master locator
+      queue_master_locator=min-masters
+      # enable guest user
+      loopback_users.guest = false
+    env: {}
+    extraConfiguration: |-
+      #disk_free_limit.absolute = 50MB
+      #management.load_definitions = /app/load_definition.json
+    extraPlugins: rabbitmq_auth_backend_ldap
+    loadDefinition:
+      enabled: false
+      secretName: load-definition
+    logs: '-'
+    maxAvailableSchedulers: 2
+    onlineSchedulers: 1
+    password: test
+    plugins: rabbitmq_management rabbitmq_peer_discovery_k8s
+    setUlimitNofiles: true
+    tls:
+      caCertificate: ''
+      enabled: false
+      failIfNoPeerCert: true
+      serverCertificate: ''
+      serverKey: ''
+      sslOptionsVerify: verify_peer
+    ulimitNofiles: '65536'
+    username: test
+  rbacEnabled: true
+  readinessProbe:
+    enabled: true
+    failureThreshold: 3
+    initialDelaySeconds: 10
+    periodSeconds: 30
+    successThreshold: 1
+    timeoutSeconds: 20
+  replicas: 1
+  resources: {}
+  securityContext:
+    enabled: true
+    extra: {}
+    fsGroup: 1001
+    runAsUser: 1001
+  service:
+    annotations: {}
+    distPort: 25672
+    managerPort: 15672
+    port: 5672
+    tlsPort: 5671
+    type: ClusterIP
+  tolerations: []
+  updateStrategy:
+    type: RollingUpdate
+  volumePermissions:
+    enabled: true
+    image:
+      pullPolicy: IfNotPresent
+      registry: docker.io
+      repository: bitnami/minideb
+      tag: stretch
+    resources: {}
+rbacEnabled: true
+redis:
+  backendDbNumber: 0
+  backendUrl: ''
+  brokerDbNumber: 0
+  brokerUrl: ''
+  cluster:
+    enabled: true
+    slaveCount: 2
+  clusterDomain: cluster.local
+  common:
+    exampleValue: common-chart
+    global:
+      celeryConfigSecretName: dagster-celery-config-secret
+      dagsterHome: /opt/dagster/dagster_home
+      postgresqlSecretName: dagster-postgresql-secret
+      redis: {}
+      serviceAccountName: ''
+  configmap: |-
+    # Enable AOF https://redis.io/topics/persistence#append-only-file
+    appendonly yes
+    # Disable RDB persistence, AOF persistence already enabled.
+    save ""
+  containerSecurityContext:
+    enabled: true
+    runAsUser: 1001
+  enabled: false
+  global:
+    celeryConfigSecretName: dagster-celery-config-secret
+    dagsterHome: /opt/dagster/dagster_home
+    postgresqlSecretName: dagster-postgresql-secret
+    redis: {}
+    serviceAccountName: ''
+  host: ''
+  image:
+    pullPolicy: IfNotPresent
+    registry: docker.io
+    repository: bitnami/redis
+    tag: 6.0.10-debian-10-r19
+  internal: false
+  master:
+    affinity: {}
+    command: /run.sh
+    configmap: null
+    customLivenessProbe: {}
+    customReadinessProbe: {}
+    disableCommands:
+      - FLUSHDB
+      - FLUSHALL
+    extraEnvVars: []
+    extraEnvVarsCM: []
+    extraEnvVarsSecret: []
+    extraFlags: []
+    hostAliases: []
+    livenessProbe:
+      enabled: true
+      failureThreshold: 5
+      initialDelaySeconds: 5
+      periodSeconds: 5
+      successThreshold: 1
+      timeoutSeconds: 5
+    persistence:
+      accessModes:
+        - ReadWriteOnce
+      enabled: true
+      matchExpressions: {}
+      matchLabels: {}
+      path: /data
+      size: 8Gi
+      subPath: ''
+      volumes: null
+    podAnnotations: {}
+    podLabels: {}
+    preExecCmds: ''
+    priorityClassName: {}
+    readinessProbe:
+      enabled: true
+      failureThreshold: 5
+      initialDelaySeconds: 5
+      periodSeconds: 5
+      successThreshold: 1
+      timeoutSeconds: 1
+    service:
+      annotations: {}
+      externalTrafficPolicy: Cluster
+      labels: {}
+      loadBalancerIP: null
+      port: 6379
+      type: ClusterIP
+    shareProcessNamespace: false
+    statefulset:
+      annotations: {}
+      labels: {}
+      updateStrategy: RollingUpdate
+      volumeClaimTemplates:
+        annotations: {}
+        labels: {}
+  metrics:
+    enabled: false
+    image:
+      pullPolicy: IfNotPresent
+      registry: docker.io
+      repository: bitnami/redis-exporter
+      tag: 1.16.0-debian-10-r7
+    podAnnotations:
+      prometheus.io/port: '9121'
+      prometheus.io/scrape: 'true'
+    priorityClassName: {}
+    prometheusRule:
+      additionalLabels: {}
+      enabled: false
+      namespace: ''
+      rules: []
+    service:
+      annotations: {}
+      externalTrafficPolicy: Cluster
+      labels: {}
+      type: ClusterIP
+    serviceMonitor:
+      enabled: false
+      metricRelabelings: []
+      relabelings: []
+      selector:
+        prometheus: kube-prometheus
+  networkPolicy:
+    enabled: false
+    ingressNSMatchLabels: {}
+    ingressNSPodMatchLabels: {}
+  password: test
+  persistence:
+    existingClaim: null
+  podDisruptionBudget:
+    enabled: false
+    minAvailable: 1
+  podSecurityPolicy:
+    create: false
+  port: 6379
+  rbac:
+    create: false
+    role:
+      rules: []
+  redisPort: 6379
+  securityContext:
+    enabled: true
+    fsGroup: 1001
+  sentinel:
+    configmap: null
+    customLivenessProbe: {}
+    customReadinessProbe: {}
+    downAfterMilliseconds: 60000
+    enabled: false
+    extraEnvVars: []
+    extraEnvVarsCM: []
+    extraEnvVarsSecret: []
+    failoverTimeout: 18000
+    image:
+      pullPolicy: IfNotPresent
+      registry: docker.io
+      repository: bitnami/redis-sentinel
+      tag: 6.0.10-debian-10-r18
+    initialCheckTimeout: 5
+    livenessProbe:
+      enabled: true
+      failureThreshold: 5
+      initialDelaySeconds: 5
+      periodSeconds: 5
+      successThreshold: 1
+      timeoutSeconds: 5
+    masterSet: mymaster
+    parallelSyncs: 1
+    port: 26379
+    preExecCmds: ''
+    quorum: 2
+    readinessProbe:
+      enabled: true
+      failureThreshold: 5
+      initialDelaySeconds: 5
+      periodSeconds: 5
+      successThreshold: 1
+      timeoutSeconds: 1
+    service:
+      annotations: {}
+      externalTrafficPolicy: Cluster
+      labels: {}
+      loadBalancerIP: null
+      redisPort: 6379
+      sentinelPort: 26379
+      type: ClusterIP
+    staticID: false
+    usePassword: true
+  serviceAccount:
+    create: false
+    name: null
+  slave:
+    affinity: {}
+    command: /run.sh
+    configmap: null
+    customLivenessProbe: {}
+    customReadinessProbe: {}
+    disableCommands:
+      - FLUSHDB
+      - FLUSHALL
+    extraEnvVars: []
+    extraEnvVarsCM: []
+    extraEnvVarsSecret: []
+    extraFlags: []
+    hostAliases: []
+    livenessProbe:
+      enabled: true
+      failureThreshold: 5
+      initialDelaySeconds: 30
+      periodSeconds: 10
+      successThreshold: 1
+      timeoutSeconds: 5
+    persistence:
+      accessModes:
+        - ReadWriteOnce
+      enabled: true
+      matchExpressions: {}
+      matchLabels: {}
+      path: /data
+      size: 8Gi
+      subPath: ''
+    podAnnotations: {}
+    podLabels: {}
+    port: 6379
+    preExecCmds: ''
+    priorityClassName: {}
+    readinessProbe:
+      enabled: true
+      failureThreshold: 5
+      initialDelaySeconds: 5
+      periodSeconds: 10
+      successThreshold: 1
+      timeoutSeconds: 10
+    service:
+      annotations: {}
+      externalTrafficPolicy: Cluster
+      labels: {}
+      loadBalancerIP: null
+      port: 6379
+      type: ClusterIP
+    shareProcessNamespace: false
+    spreadConstraints: {}
+    statefulset:
+      annotations: {}
+      labels: {}
+      updateStrategy: RollingUpdate
+      volumeClaimTemplates:
+        annotations: {}
+        labels: {}
+  sysctlImage:
+    command: []
+    enabled: false
+    mountHostSys: false
+    pullPolicy: Always
+    registry: docker.io
+    repository: bitnami/minideb
+    resources: {}
+    tag: buster
+  tls:
+    authClients: true
+    certCAFilename: null
+    certFilename: null
+    certKeyFilename: null
+    certificatesSecret: null
+    enabled: false
+  usePassword: false
+  usePasswordFile: false
+  volumePermissions:
+    enabled: false
+    image:
+      pullPolicy: Always
+      registry: docker.io
+      repository: bitnami/minideb
+      tag: buster
+    resources: {}
+    securityContext:
+      runAsUser: 0
+retention:
+  autoMaterialize:
+    purgeAfterDays:
+      failure: -1
+      skipped: 7
+      started: -1
+      success: -1
+  enabled: false
+  schedule:
+    purgeAfterDays: -1
+  sensor:
+    purgeAfterDays:
+      failure: -1
+      skipped: 7
+      started: -1
+      success: -1
+runLauncher:
+  config:
+    celeryK8sRunLauncher:
+      affinity: {}
+      annotations: {}
+      configSource: {}
+      env: {}
+      envConfigMaps: []
+      envSecrets: []
+      failPodOnRunFailure: false
+      image:
+        pullPolicy: Always
+        repository: docker.io/dagster/dagster-celery-k8s
+        tag: null
+      imagePullPolicy: Always
+      jobNamespace: null
+      labels: {}
+      livenessProbe:
+        failureThreshold: 3
+        initialDelaySeconds: 15
+        periodSeconds: 10
+        successThreshold: 1
+        timeoutSeconds: 10
+      nameOverride: celery-workers
+      nodeSelector: {}
+      podSecurityContext: {}
+      resources: {}
+      securityContext: {}
+      tolerations: []
+      volumeMounts: []
+      volumes: []
+      workerQueues:
+        - additionalCeleryArgs: []
+          configSource: {}
+          labels: {}
+          name: dagster
+          nodeSelector: {}
+          replicaCount: 2
+    k8sRunLauncher:
+      envConfigMaps: []
+      envSecrets: []
+      envVars: []
+      failPodOnRunFailure: false
+      imagePullPolicy: Always
+      jobNamespace: null
+      kubeconfigFile: null
+      labels: {}
+      loadInclusterConfig: true
+      resources: {}
+      runK8sConfig: {}
+      securityContext: null
+      volumeMounts: []
+      volumes: []
+  type: K8sRunLauncher
+scheduler:
+  config: {}
+  type: DagsterDaemonScheduler
+serviceAccount:
+  annotations: {}
+  create: true
+  name: ''
+telemetry:
+  enabled: true

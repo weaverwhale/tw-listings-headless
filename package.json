@@ -1,0 +1,25 @@
+{
+  "name": "tw-listings-headless",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vue-tsc && vite build",
+    "preview": "vite preview",
+    "generate": "tsx ./generate/index.ts"
+  },
+  "dependencies": {
+    "fuzzysort": "^3.0.1",
+    "typescript": "^5.4.5",
+    "vue": "^3.4.21"
+  },
+  "devDependencies": {
+    "@types/node": "^20.14.2",
+    "@vitejs/plugin-vue": "^5.0.4",
+    "prettier": "^3.3.2",
+    "tsx": "^4.15.4",
+    "vite": "^5.2.0",
+    "vue-tsc": "^2.0.6"
+  }
+}

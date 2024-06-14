@@ -1,0 +1,194 @@
+:root {
+  --font-family: -apple-system, BlinkMacSystemFont, San Francisco, Segoe UI, Roboto, Helvetica Neue,
+    sans-serif;
+  --dark-black: #0d1117;
+  --black: #202223;
+  --yellow: #e9ff66;
+  --blue: #1877f2;
+  --middle-blue: #0d3854;
+  --dark-blue: #062940;
+  --light-blue: #c0d6ea;
+  --white: #fff;
+  --off-white: #e7e7e7;
+  --light-gray: #bababa;
+  --code-gray: #eceef0;
+  --gray: #999;
+  --dark-gray: rgb(124, 124, 124);
+  --box-shadow: 0 0 0.3125rem rgba(23, 24, 24, 0.05), 0 0.0625rem 0.125rem rgba(0, 0, 0, 0.15); /* polaris */
+  --box-shadow-deep: rgb(0 0 0 / 16%) 0px 0px 8px;
+  --ease-in-out: cubic-bezier(0.42, 0, 0.58, 1);
+
+  /* element specific styles */
+  --body-text: var(--black);
+  --body-background: #f6f6f7;
+  --header-background: var(--body-background);
+  --item-background: var(--white);
+  --item-text: var(--black);
+  --item-text-hover: var(--blue);
+  --code-color: var(--black);
+  --link-color: var(--blue);
+  --placeholder-color: var(--dark-gray);
+  --border-gray: var(--light-gray);
+}
+
+/* 
+prefers dark mode
+https://developer.mozilla.org/en-US/docs/Web/CSS/@media/prefers-color-scheme
+*/
+@media (prefers-color-scheme: dark) {
+  :root {
+    --body-text: var(--white);
+    --body-background: var(--dark-blue);
+    --item-background: var(--middle-blue);
+    --item-text: var(--white);
+    --item-text-hover: var(--yellow);
+    --link-color: var(--yellow);
+    --code-color: var(--code-gray);
+    --placeholder-color: var(--gray);
+    --border-gray: var(--dark-gray);
+  }
+}
+
+/* ❗️ keep the rules in sync with the automatic dark mode above! */
+:root.dark {
+  --body-text: var(--white);
+  --body-background: var(--dark-blue);
+  --item-background: var(--middle-blue);
+  --item-text: var(--white);
+  --item-text-hover: var(--yellow);
+  --link-color: var(--yellow);
+  --code-color: var(--code-gray);
+  --placeholder-color: var(--gray);
+  --border-gray: var(--dark-gray);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+[v-cloak] {
+  visibility: hidden;
+}
+
+body {
+  font-family: var(--font-family);
+  margin: auto;
+  padding: 1em;
+  text-align: left;
+  background-color: var(--body-background);
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+  line-height: 1.5;
+  color: var(--body-text);
+}
+
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+  margin: 0;
+  margin-bottom: 1rem;
+}
+
+a {
+  color: var(--link-color);
+}
+
+pre {
+  display: inline-block;
+  line-height: 0;
+  white-space: normal;
+}
+
+code,
+.code {
+  font-family: monospace;
+  padding: 2px 5px;
+  color: var(--code-color);
+}
+
+input,
+select,
+button {
+  display: block;
+  width: 100%;
+  padding: 0.5em;
+  border: 1px solid var(--border-gray);
+  color: var(--body-text);
+  border-radius: 5px;
+  margin-bottom: 1em;
+  background: var(--item-background);
+}
+
+::placeholder {
+  color: var(--placeholder-color);
+}
+
+button {
+  cursor: pointer;
+}
+
+nav {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+nav h1 {
+  display: flex;
+  align-items: center;
+  gap: 0.5em;
+}
+
+nav h2 {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1em;
+}
+
+nav i {
+  font-style: normal;
+  cursor: pointer;
+}
+
+.inputs {
+  display: flex;
+  gap: 1em;
+  background: var(--header-background);
+  position: sticky;
+  top: 0;
+  padding: 1em 0 0.25em;
+  z-index: 1;
+}
+
+.inputs select,
+.inputs button {
+  flex-basis: 150px;
+}
+
+.no-margin {
+  margin: 0;
+}
+
+.item-wrapper {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1em;
+}
+
+.item {
+  flex-grow: 1;
+  border-radius: 5px;
+  padding: 1em;
+  background: var(--item-background);
+  box-shadow: var(--box-shadow);
+}
+
+.results {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 1em;
+}
