@@ -20,6 +20,6 @@ yarn generate
 
 ## Screenshots
 
-|                      |                       |
+|         Light        |          Dark         |
 | -------------------- | --------------------- |
 | <img src="ss.png" /> | <img src="ss2.png" /> |
